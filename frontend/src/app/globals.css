@@ -1,0 +1,48 @@
+@import "tailwindcss";
+@import "../styles/_variables.scss";
+@import "../styles/_keyframe-animations.scss";
+
+@layer base {
+  .ProseMirror {
+    @apply min-h-[200px] outline-none select-text whitespace-pre-wrap break-words p-4;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
+      overflow-y: auto; 
+    max-height: 670px;  
+  }
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Remove or fix this if it's unused or from a plugin */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+
+/* textarea {
+  font-family: monospace;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow: auto;
+}
+
+.cursor-container {
+  position: relative;
+  overflow: hidden;
+} */
