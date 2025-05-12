@@ -1,5 +1,8 @@
 import http from "http";
 import { Server } from "socket.io";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 interface ClientData {
   id: string;
@@ -97,7 +100,7 @@ io.on("connection", (socket) => {
 });
 
 // Starting server
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
