@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
@@ -20,7 +20,7 @@ interface EditHistory {
   timestamp: string;
 }
 
-export default function Editor() {
+export const CollabEditor: React.FC = () => {
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
   const [isConnected, setIsConnected] = useState(false);
@@ -29,12 +29,13 @@ export default function Editor() {
   const [remoteCursors, setRemoteCursors] = useState<{ [key: string]: User }>(
     {}
   );
+
   const [editHistory, setEditHistory] = useState<EditHistory[]>([]);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
 
   const socketRef = useRef<Socket | null>(null);
   const userColorRef = useRef(`hsl(${Math.random() * 360}, 70%, 70%)`);
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<Editor | null>(null);
   const lastTypedPositionRef = useRef<number | null>(null);
   const cursorTimeoutsRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
 
@@ -271,8 +272,12 @@ export default function Editor() {
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && setShowNameInput(false)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setName(e.target.value)
+              }
+              onKeyDown={(e: React.KeyboardEvent) =>
+                e.key === "Enter" && setShowNameInput(false)
+              }
               className="border p-2 rounded"
               placeholder="Enter your name"
             />
@@ -314,6 +319,18 @@ export default function Editor() {
         <EditorContent editor={editor} />
         {renderCursors()}
       </div>
+      <div>
+        {editHistory.map((history, index) => (
+          <div key={index}>
+            <span style={{ color: history.user === name ? "blue" : "black" }}>
+              {history.user}:{" "}
+            </span>
+            <span style={{ color: history.user === name ? "blue" : "black" }}>
+              {history.change}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
-}
+};

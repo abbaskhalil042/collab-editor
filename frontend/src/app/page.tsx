@@ -1,9 +1,9 @@
-import Editor from "@/components/Editor";
+import { CollabEditor } from "@/components/Editor";
 
 const Home = () => {
   return (
     <div>
-      <Editor />
+      <CollabEditor />
     </div>
   );
 };
