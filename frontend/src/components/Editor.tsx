@@ -94,7 +94,7 @@ export const CollabEditor: React.FC = () => {
 
   useEffect(() => {
     if (!showNameInput && !socketRef.current) {
-      const socket = io("http://localhost:4000", {
+      const socket = io("https://collab-editor-backend-bknx.onrender.com", {
         transports: ["websocket"],
         query: { name, color: userColorRef.current },
       });
