@@ -1,12 +1,11 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import { Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 
-// Define the User interface
 interface User {
   id: string;
   name: string;
@@ -26,10 +25,7 @@ export const CollabEditor: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [showNameInput, setShowNameInput] = useState(true);
-  const [remoteCursors, setRemoteCursors] = useState<{ [key: string]: User }>(
-    {}
-  );
-
+  const [remoteCursors, setRemoteCursors] = useState<{ [key: string]: User }>({});
   const [editHistory, setEditHistory] = useState<EditHistory[]>([]);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
 
@@ -39,7 +35,43 @@ export const CollabEditor: React.FC = () => {
   const lastTypedPositionRef = useRef<number | null>(null);
   const cursorTimeoutsRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
 
-  //tiptap
+  // Clear all timeouts when component unmounts
+  const clearAllTimeouts = useCallback(() => {
+    const timeouts = cursorTimeoutsRef.current;
+    Object.values(timeouts).forEach(clearTimeout);
+    cursorTimeoutsRef.current = {};
+  }, []);
+
+  // Handle cursor position updates
+  const handleCursorPosition = useCallback((userData: User) => {
+    if (userData.id !== socketRef.current?.id) {
+      setRemoteCursors((prev) => {
+        const newCursors = { ...prev, [userData.id]: userData };
+
+        // Clear previous timeout if exists
+        if (cursorTimeoutsRef.current[userData.id]) {
+          clearTimeout(cursorTimeoutsRef.current[userData.id]);
+        }
+
+        // Set new timeout to remove cursor after 2 seconds
+        const timeoutId = setTimeout(() => {
+          setRemoteCursors((prev) => {
+            const updated = { ...prev };
+            delete updated[userData.id];
+            return updated;
+          });
+          delete cursorTimeoutsRef.current[userData.id];
+        }, 2000);
+
+        // Store the timeout ID in the ref
+        cursorTimeoutsRef.current[userData.id] = timeoutId;
+
+        return newCursors;
+      });
+    }
+  }, []);
+
+  // tiptap editor configuration
   const editor = useEditor({
     extensions: [StarterKit, TextStyle, Color],
     content,
@@ -47,12 +79,10 @@ export const CollabEditor: React.FC = () => {
       const newContent = editor.getHTML();
       setContent(newContent);
 
-      // change cursor position
       if (socketRef.current?.connected) {
         const cursorPos = editor.state.selection.anchor;
         lastTypedPositionRef.current = cursorPos;
 
-        // Emit cursor position
         socketRef.current.emit("cursor-position", {
           id: socketRef.current.id,
           name,
@@ -60,20 +90,14 @@ export const CollabEditor: React.FC = () => {
           cursorPos,
         });
 
-        // Emit content update
         socketRef.current.emit("update", newContent);
-
-        // Emit typing indicator
         socketRef.current.emit("user-typing");
 
-        // Apply color to newly typed text which will be in the same color like the color fo the cursorpointer
         const { from, to } = editor.state.selection;
         if (from !== to) return;
         editor.commands.setColor(userColorRef.current);
       }
     },
-
-    // listening to selection changes
     onSelectionUpdate: ({ editor }) => {
       if (socketRef.current?.connected) {
         const cursorPos = editor.state.selection.anchor;
@@ -109,7 +133,6 @@ export const CollabEditor: React.FC = () => {
           return newSet;
         });
 
-        // Clear typing indicator after 1.5 seconds
         setTimeout(() => {
           setTypingUsers((prev) => {
             const newSet = new Set(prev);
@@ -121,8 +144,6 @@ export const CollabEditor: React.FC = () => {
 
       socket.on("connect", () => setIsConnected(true));
       socket.on("disconnect", () => setIsConnected(false));
-
-      // Handle initial content and user list
       socket.on("content", (data) => {
         if (editorRef.current) {
           editorRef.current.commands.setContent(data.content, false);
@@ -131,32 +152,7 @@ export const CollabEditor: React.FC = () => {
         }
       });
 
-      // Handle cursor positions with timeout
-      socket.on("cursor-position", (userData) => {
-        if (userData.id !== socket.id) {
-          setRemoteCursors((prev) => {
-            const newCursors = { ...prev, [userData.id]: userData };
-
-            // Clear previous timeout if exists
-            if (cursorTimeoutsRef.current[userData.id]) {
-              clearTimeout(cursorTimeoutsRef.current[userData.id]);
-            }
-
-            // Set new timeout to remove cursor after 2 seconds
-            cursorTimeoutsRef.current[userData.id] = setTimeout(() => {
-              setRemoteCursors((prev) => {
-                const updated = { ...prev };
-                delete updated[userData.id];
-                return updated;
-              });
-            }, 2000);
-
-            return newCursors;
-          });
-        }
-      });
-
-      // Handle user activity
+      socket.on("cursor-position", handleCursorPosition);
       socket.on("user-activity", (activity) => {
         setEditHistory((prev) =>
           [
@@ -170,12 +166,10 @@ export const CollabEditor: React.FC = () => {
         );
       });
 
-      // Handle new user connections
       socket.on("user-connected", (user) => {
         setUsers((prev) => [...prev, user]);
       });
 
-      // Handle user disconnections
       socket.on("user-disconnected", (userId) => {
         setUsers((prev) => prev.filter((u) => u.id !== userId));
         setRemoteCursors((prev) => {
@@ -190,21 +184,20 @@ export const CollabEditor: React.FC = () => {
       });
 
       return () => {
-        // Clean up all timeouts on unmount
-        Object.values(cursorTimeoutsRef.current).forEach(clearTimeout);
+        clearAllTimeouts();
         socket.disconnect();
       };
     }
-  }, [showNameInput, name]);
+  }, [showNameInput, name, handleCursorPosition, clearAllTimeouts]);
 
-  const renderCursors = () => {
+  const renderCursors = useCallback(() => {
     if (!editorRef.current) return null;
     const editor = editorRef.current;
     const view = editor.view;
     const docSize = view.state.doc.content.size;
 
     return Object.values(remoteCursors)
-      .filter((user) => typingUsers.has(user.id)) // Only show cursors of typing users
+      .filter((user) => typingUsers.has(user.id))
       .map((user) => {
         if (user.cursorPos === undefined) return null;
 
@@ -259,7 +252,7 @@ export const CollabEditor: React.FC = () => {
           return null;
         }
       });
-  };
+  }, [remoteCursors, typingUsers]);
 
   if (showNameInput) {
     return (
@@ -272,12 +265,8 @@ export const CollabEditor: React.FC = () => {
             <input
               type="text"
               value={name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setName(e.target.value)
-              }
-              onKeyDown={(e: React.KeyboardEvent) =>
-                e.key === "Enter" && setShowNameInput(false)
-              }
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && setShowNameInput(false)}
               className="border p-2 rounded"
               placeholder="Enter your name"
             />
@@ -319,14 +308,18 @@ export const CollabEditor: React.FC = () => {
         <EditorContent editor={editor} />
         {renderCursors()}
       </div>
-      <div>
+      <div className="mt-4">
+        <h3 className="font-medium mb-2">Recent Changes:</h3>
         {editHistory.map((history, index) => (
-          <div key={index}>
+          <div key={index} className="text-sm mb-1">
             <span style={{ color: history.user === name ? "blue" : "black" }}>
               {history.user}:{" "}
             </span>
             <span style={{ color: history.user === name ? "blue" : "black" }}>
               {history.change}
+            </span>
+            <span className="text-gray-500 text-xs ml-2">
+              {history.timestamp}
             </span>
           </div>
         ))}
