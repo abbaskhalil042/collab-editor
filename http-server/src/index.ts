@@ -1,3 +1,4 @@
+import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import dotenv from "dotenv";
@@ -11,6 +12,13 @@ interface ClientData {
   cursorPos?: number;
 }
 
+const app = express();
+
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.send("checking server");
+});
 // Socket.io
 const server = http.createServer();
 const io = new Server(server, {
