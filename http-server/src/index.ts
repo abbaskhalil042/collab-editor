@@ -20,7 +20,7 @@ app.get("/", (req, res) => {
   res.send("checking server");
 });
 // Socket.io
-const server = http.createServer();
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: ["*"],
